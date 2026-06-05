@@ -1,11 +1,13 @@
 use std::sync::Arc;
 use winit::dpi::PhysicalSize;
 use winit::window::Window;
+use wgpu::util::DeviceExt;
 
 pub struct Renderer {
     gpu: GpuContext,
     surface: SurfaceState,
     triangle_pass: TrianglePass,
+    triangle_mesh: Mesh,
 }
 
 impl Renderer {
@@ -24,11 +26,12 @@ impl Renderer {
         surface.configure(&gpu.device);
 
         let triangle_pass = TrianglePass::new(&gpu.device, surface.view_format());
-
+        let triangle_mesh = Mesh::new(&gpu.device);
         Self {
             gpu,
             surface,
             triangle_pass,
+            triangle_mesh,
         }
     }
 
@@ -96,7 +99,8 @@ impl Renderer {
                 multiview_mask: None,
             });
 
-            self.triangle_pass.draw(&mut render_pass);
+            //self.triangle_pass.draw(&mut render_pass);
+            self.triangle_pass.draw_mesh(&mut render_pass, &self.triangle_mesh);
         }
 
         self.gpu.queue.submit([encoder.finish()]);
@@ -238,7 +242,7 @@ impl TrianglePass {
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: Some("vs_main"),
-                buffers: &[],
+                buffers: &[Vertex::desc()],
                 compilation_options: Default::default(),
             },
             fragment: Some(wgpu::FragmentState {
@@ -264,5 +268,65 @@ impl TrianglePass {
     fn draw(&self, render_pass: &mut wgpu::RenderPass<'_>) {
         render_pass.set_pipeline(&self.pipeline);
         render_pass.draw(0..3, 0..1);
+    }
+
+    fn draw_mesh<'a>(&'a self, render_pass: &mut wgpu::RenderPass<'a>, mesh: &'a Mesh)
+    {
+        render_pass.set_pipeline(&self.pipeline);
+        render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
+        render_pass.draw(0..mesh.vertex_count, 0..1);
+    }
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+struct Vertex {
+    position: [f32; 3],
+    color: [f32; 3],
+}
+
+impl Vertex {
+    fn desc() -> wgpu::VertexBufferLayout<'static> {
+        wgpu::VertexBufferLayout {
+            array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
+            step_mode: wgpu::VertexStepMode::Vertex,
+            attributes: &[
+                wgpu::VertexAttribute {
+                    offset: 0,
+                    shader_location: 0,
+                    format: wgpu::VertexFormat::Float32x3,
+                },
+                wgpu::VertexAttribute {
+                    offset: std::mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
+                    shader_location: 1,
+                    format: wgpu::VertexFormat::Float32x3,
+                },
+            ],
+        }
+    }
+}
+struct Mesh {
+    vertex_buffer: wgpu::Buffer,
+    vertex_count: u32,
+}
+
+const VERTICES: &[Vertex] = &[
+    Vertex { position: [0.0, 0.5, 0.0], color: [1.0, 0.0, 0.0] },
+    Vertex { position: [-0.5, -0.5, 0.0], color: [0.0, 1.0, 0.0] },
+    Vertex { position: [0.5, -0.5, 0.0], color: [0.0, 0.0, 1.0] },
+];
+impl Mesh{
+    fn new(device: &wgpu::Device) -> Self{
+
+        let vertex_buffer = device.create_buffer_init(
+            &wgpu::util::BufferInitDescriptor {
+                label: Some("Vertex Buffer"),
+                contents: bytemuck::cast_slice(VERTICES),
+                usage: wgpu::BufferUsages::VERTEX,
+            });
+        Self{
+            vertex_buffer,
+            vertex_count: VERTICES.len() as u32,
+        }
     }
 }
