@@ -22,6 +22,7 @@ impl State {
         self.renderer.resize(new_size);
     }
 
+    pub fn update(&mut self) {self.renderer.update();}
     pub fn render(&mut self) {
         self.renderer.render();
     }

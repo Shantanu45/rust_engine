@@ -44,6 +44,8 @@ impl Renderer {
         self.surface.configure(&self.gpu.device);
     }
 
+    pub fn update(&self){
+    }
     pub fn render(&mut self) {
         let surface_texture = match self.surface.surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(texture) => texture,
@@ -274,7 +276,10 @@ impl TrianglePass {
     {
         render_pass.set_pipeline(&self.pipeline);
         render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
-        render_pass.draw(0..mesh.vertex_count, 0..1);
+        //render_pass.draw(0..mesh.vertex_count, 0..1);
+
+        render_pass.set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint16); // 1.
+        render_pass.draw_indexed(0..mesh.index_count, 0, 0..1); // 2
     }
 }
 
@@ -308,25 +313,41 @@ impl Vertex {
 struct Mesh {
     vertex_buffer: wgpu::Buffer,
     vertex_count: u32,
+    index_buffer: wgpu::Buffer,
+    index_count: u32,
+
 }
 
-const VERTICES: &[Vertex] = &[
-    Vertex { position: [0.0, 0.5, 0.0], color: [1.0, 0.0, 0.0] },
-    Vertex { position: [-0.5, -0.5, 0.0], color: [0.0, 1.0, 0.0] },
-    Vertex { position: [0.5, -0.5, 0.0], color: [0.0, 0.0, 1.0] },
-];
 impl Mesh{
     fn new(device: &wgpu::Device) -> Self{
-
+        const VERTICES: &[Vertex] = &[
+            Vertex { position: [-0.5, 0.5, 0.0], color: [1.0, 0.0, 0.0] },
+            Vertex { position: [0.5, 0.5, 0.0], color: [1.0, 1.0, 0.0] },
+            Vertex { position: [-0.5, -0.5, 0.0], color: [0.0, 1.0, 0.0] },
+            Vertex { position: [0.5, -0.5, 0.0], color: [0.0, 0.0, 1.0] },
+        ];
+        const INDICES: &[u16] = &[
+            0,1,2,
+            1,3,2
+        ];
         let vertex_buffer = device.create_buffer_init(
             &wgpu::util::BufferInitDescriptor {
                 label: Some("Vertex Buffer"),
-                contents: bytemuck::cast_slice(VERTICES),
+                contents: bytemuck::cast_slice(VERTICES),// cast_slice: reinterprets a slice of one type as a slice of another type without copying the data. Example: u32 → u8
                 usage: wgpu::BufferUsages::VERTEX,
             });
+        let index_buffer = device.create_buffer_init(
+            &wgpu::util::BufferInitDescriptor {
+                label: Some("Index Buffer"),
+                contents: bytemuck::cast_slice(INDICES),
+                usage: wgpu::BufferUsages::INDEX,
+            }
+        );
         Self{
             vertex_buffer,
             vertex_count: VERTICES.len() as u32,
+            index_buffer,
+            index_count: INDICES.len() as u32,
         }
     }
 }

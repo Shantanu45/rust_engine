@@ -40,6 +40,7 @@ impl ApplicationHandler for App {
                     return;
                 };
 
+                state.update();
                 state.render();
                 // Emits a new redraw requested event.
                 state.get_window().request_redraw();
