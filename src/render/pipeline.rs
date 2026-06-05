@@ -1,4 +1,4 @@
-use crate::shader_reflect::{reflect_wgsl, BindGroupReflection};
+use crate::shader_reflect::{reflect_wgsl, validate_vertex_layout, BindGroupReflection};
 
 use super::mesh::{Mesh, Vertex};
 
@@ -16,6 +16,8 @@ impl TrianglePass {
         });
 
         let reflection = reflect_wgsl("triangle", shader_source).unwrap();
+        validate_vertex_layout("triangle", &reflection, "vs_main", &[Vertex::desc()]).unwrap();
+
         let bind_group_layouts = reflection
             .bind_groups
             .iter()
