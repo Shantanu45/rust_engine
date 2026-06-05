@@ -2001,6 +2001,7 @@ dependencies = [
  "bytemuck",
  "glam",
  "image",
+ "naga",
  "pollster",
  "tracing",
  "tracing-subscriber",

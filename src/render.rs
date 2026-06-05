@@ -3,6 +3,7 @@ use image::GenericImageView;
 use winit::dpi::PhysicalSize;
 use winit::window::Window;
 use wgpu::util::DeviceExt;
+use crate::shader_reflect::{reflect_wgsl, BindGroupReflection};
 
 pub struct Renderer {
     gpu: GpuContext,
@@ -238,6 +239,17 @@ impl TrianglePass {
             label: Some("Triangle Shader"),
             source: wgpu::ShaderSource::Wgsl(shader_source.into()),
         });
+        let reflection = reflect_wgsl("triangle", shader_source);
+        let bind_group_layouts = reflection.unwrap()
+            .bind_groups
+            .iter()
+            .map(|group| create_bind_group_layout(device, group, "Triangle Bind Group Layout"))
+            .collect::<Vec<_>>();
+
+        let bind_group_layout_refs = bind_group_layouts
+            .iter()
+            .map(Some)
+            .collect::<Vec<Option<&wgpu::BindGroupLayout>>>();
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("Triangle Pipeline"),
@@ -433,6 +445,28 @@ impl Texture{
             sampler: diffuse_sampler,
         }
     }
+}
+
+fn create_bind_group_layout(
+    device: &wgpu::Device,
+    group: &BindGroupReflection,
+    label: &str,
+) -> wgpu::BindGroupLayout {
+    let entries = group
+        .bindings
+        .iter()
+        .map(|b| wgpu::BindGroupLayoutEntry {
+            binding: b.binding,
+            visibility: b.visibility,
+            ty: b.binding_type,
+            count: None,
+        })
+        .collect::<Vec<_>>();
+
+    device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some(label),
+        entries: &entries,
+    })
 }
 
 
