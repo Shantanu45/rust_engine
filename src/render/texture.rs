@@ -1,9 +1,9 @@
 use image::GenericImageView;
 
 pub(super) struct Texture {
-    texture: wgpu::Texture,
-    view: wgpu::TextureView,
-    sampler: wgpu::Sampler,
+    pub(super) texture: wgpu::Texture,
+    pub(super) view: wgpu::TextureView,
+    pub(super) sampler: wgpu::Sampler,
 }
 
 impl Texture {

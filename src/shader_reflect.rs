@@ -327,7 +327,11 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec![0, 1]
         );
-        assert!(reflection.bind_groups.is_empty());
+        assert_eq!(reflection.bind_groups.len(), 1);
+        assert_eq!(reflection.bind_groups[0].group, 0);
+        assert_eq!(reflection.bind_groups[0].bindings.len(), 2);
+        assert_eq!(reflection.bind_groups[0].bindings[0].binding, 0);
+        assert_eq!(reflection.bind_groups[0].bindings[1].binding, 1);
     }
 
     #[test]

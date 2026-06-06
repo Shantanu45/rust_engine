@@ -1,14 +1,22 @@
 use crate::shader_reflect::{reflect_wgsl, validate_vertex_layout, BindGroupReflection};
 
 use super::mesh::{Mesh, Vertex};
+use super::texture::Texture;
 
 pub(super) struct TrianglePass {
     pipeline: wgpu::RenderPipeline,
+    bind_group: wgpu::BindGroup,
+    texture: Texture,
 }
 
 impl TrianglePass {
-    pub(super) fn new(device: &wgpu::Device, color_format: wgpu::TextureFormat) -> Self {
+    pub(super) fn new(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        color_format: wgpu::TextureFormat,
+    ) -> Self {
         let shader_source = include_str!("../shaders/triangle.wgsl");
+        let texture_data = include_bytes!("../../assets/textures/tree.png");
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Triangle Shader"),
@@ -33,6 +41,25 @@ impl TrianglePass {
             label: Some("Triangle Pipeline Layout"),
             bind_group_layouts: &bind_group_layout_refs,
             immediate_size: 0,
+        });
+
+        let texture = Texture::new(texture_data, queue, device);
+        let bind_group_layout = bind_group_layouts
+            .first()
+            .expect("triangle shader must declare a texture bind group");
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Triangle Texture Bind Group"),
+            layout: bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&texture.view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&texture.sampler),
+                },
+            ],
         });
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -61,7 +88,11 @@ impl TrianglePass {
             cache: None,
         });
 
-        Self { pipeline }
+        Self {
+            pipeline,
+            bind_group,
+            texture,
+        }
     }
 
     pub(super) fn draw_mesh<'a>(
@@ -70,6 +101,7 @@ impl TrianglePass {
         mesh: &'a Mesh,
     ) {
         render_pass.set_pipeline(&self.pipeline);
+        render_pass.set_bind_group(0, &self.bind_group, &[]);
         render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
         render_pass.set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
         render_pass.draw_indexed(0..mesh.index_count, 0, 0..1);

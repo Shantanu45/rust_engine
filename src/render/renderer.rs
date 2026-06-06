@@ -30,7 +30,7 @@ impl Renderer {
 
         surface.configure(&gpu.device);
 
-        let triangle_pass = TrianglePass::new(&gpu.device, surface.view_format());
+        let triangle_pass = TrianglePass::new(&gpu.device, &gpu.queue, surface.view_format());
         let triangle_mesh = Mesh::new(&gpu.device);
         Self {
             gpu,
@@ -80,7 +80,7 @@ impl Renderer {
                 format: Some(self.surface.view_format()),
                 ..Default::default()
             });
-
+        
         let mut encoder =
             self.gpu
                 .device

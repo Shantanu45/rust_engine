@@ -9,6 +9,12 @@ struct VertexOutput {
   @location(0) tex_coords: vec2<f32>,
 };
 
+@group(0) @binding(0)
+var tree_texture: texture_2d<f32>;
+
+@group(0) @binding(1)
+var tree_sampler: sampler;
+
 @vertex
 fn vs_main(input: VertexInput) -> VertexOutput {
   var output: VertexOutput;
@@ -19,5 +25,5 @@ fn vs_main(input: VertexInput) -> VertexOutput {
 
 @fragment
 fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
-  return vec4<f32>(input.tex_coords, 0.0, 1.0);
+  return textureSample(tree_texture, tree_sampler, input.tex_coords);
 }
