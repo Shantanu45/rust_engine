@@ -1,3 +1,5 @@
+use anyhow::{Context, Result};
+
 pub(super) struct GpuContext {
     pub(super) instance: wgpu::Instance,
     pub(super) adapter: wgpu::Adapter,
@@ -6,7 +8,7 @@ pub(super) struct GpuContext {
 }
 
 impl GpuContext {
-    pub(super) async fn new(instance: wgpu::Instance, surface: &wgpu::Surface<'_>) -> Self {
+    pub(super) async fn new(instance: wgpu::Instance, surface: &wgpu::Surface<'_>) -> Result<Self> {
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
                 compatible_surface: Some(surface),
@@ -14,20 +16,20 @@ impl GpuContext {
                 ..Default::default()
             })
             .await
-            .unwrap();
+            .context("failed to find a compatible GPU adapter")?;
         Self::log_adapter_info(&adapter.get_info());
 
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor::default())
             .await
-            .unwrap();
+            .context("failed to create WGPU device")?;
 
-        Self {
+        Ok(Self {
             instance,
             adapter,
             device,
             queue,
-        }
+        })
     }
 
     fn log_adapter_info(info: &wgpu::AdapterInfo) {

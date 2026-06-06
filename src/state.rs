@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use anyhow::Result;
 use winit::window::Window;
 
 use crate::render::Renderer;
@@ -8,10 +9,10 @@ pub(crate) struct State {
 }
 
 impl State {
-    pub async fn new(window: Arc<Window>) -> State {
-        let renderer = Renderer::new(window).await;
+    pub async fn new(window: Arc<Window>) -> Result<State> {
+        let renderer = Renderer::new(window).await?;
 
-        State { renderer }
+        Ok(State { renderer })
     }
 
     pub fn get_window(&self) -> &Window {

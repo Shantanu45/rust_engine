@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use anyhow::{Context, Result};
 use winit::dpi::PhysicalSize;
 use winit::window::Window;
 
@@ -58,8 +59,11 @@ impl SurfaceState {
         self.size = new_size;
     }
 
-    pub(super) fn recreate(&mut self, instance: &wgpu::Instance) {
-        self.surface = instance.create_surface(self.window.clone()).unwrap();
+    pub(super) fn recreate(&mut self, instance: &wgpu::Instance) -> Result<()> {
+        self.surface = instance
+            .create_surface(self.window.clone())
+            .context("failed to recreate WGPU surface")?;
+        Ok(())
     }
 
     pub(super) fn window(&self) -> &Window {

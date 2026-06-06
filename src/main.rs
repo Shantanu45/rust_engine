@@ -2,6 +2,7 @@ mod render;
 mod state;
 mod shader_reflect;
 
+use anyhow::{Context, Result};
 use state::State;
 use std::sync::Arc;
 
@@ -18,13 +19,23 @@ struct App {
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         // Create window object
-        let window = Arc::new(
-            event_loop
-                .create_window(Window::default_attributes())
-                .unwrap(),
-        );
+        let window = match event_loop.create_window(Window::default_attributes()) {
+            Ok(window) => Arc::new(window),
+            Err(error) => {
+                tracing::error!(?error, "failed to create window");
+                event_loop.exit();
+                return;
+            }
+        };
 
-        let state = pollster::block_on(State::new(window.clone()));
+        let state = match pollster::block_on(State::new(window.clone())) {
+            Ok(state) => state,
+            Err(error) => {
+                tracing::error!(?error, "failed to initialize app state");
+                event_loop.exit();
+                return;
+            }
+        };
         self.state = Some(state);
 
         window.request_redraw();
@@ -60,14 +71,15 @@ impl ApplicationHandler for App {
     }
 }
 
-fn main() {
+fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
 
     tracing::info!("starting app");
-    let event_loop = EventLoop::new().unwrap();
+    let event_loop = EventLoop::new().context("failed to create event loop")?;
 
     event_loop.set_control_flow(ControlFlow::Poll);
 
     let mut app = App::default();
-    event_loop.run_app(&mut app).unwrap();
+    event_loop.run_app(&mut app).context("event loop failed")?;
+    Ok(())
 }

@@ -1,3 +1,4 @@
+use anyhow::{Context, Result};
 use image::GenericImageView;
 
 pub(super) struct Texture {
@@ -7,8 +8,8 @@ pub(super) struct Texture {
 }
 
 impl Texture {
-    pub(super) fn new(data: &'static [u8], queue: &wgpu::Queue, device: &wgpu::Device) -> Self {
-        let diffuse_image = image::load_from_memory(data).unwrap();
+    pub(super) fn new(data: &'static [u8], queue: &wgpu::Queue, device: &wgpu::Device) -> Result<Self> {
+        let diffuse_image = image::load_from_memory(data).context("failed to decode texture image")?;
         let diffuse_rgba = diffuse_image.to_rgba8();
 
         let dimensions = diffuse_image.dimensions();
@@ -56,10 +57,10 @@ impl Texture {
             ..Default::default()
         });
 
-        Self {
+        Ok(Self {
             texture: diffuse_texture,
             view: diffuse_texture_view,
             sampler: diffuse_sampler,
-        }
+        })
     }
 }

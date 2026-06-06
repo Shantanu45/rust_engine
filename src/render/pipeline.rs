@@ -1,3 +1,5 @@
+use anyhow::{Context, Result};
+
 use crate::shader_reflect::{reflect_wgsl, validate_vertex_layout, BindGroupReflection};
 
 use super::mesh::{Mesh, Vertex};
@@ -14,7 +16,7 @@ impl TrianglePass {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         color_format: wgpu::TextureFormat,
-    ) -> Self {
+    ) -> Result<Self> {
         let shader_source = include_str!("../shaders/triangle.wgsl");
         let texture_data = include_bytes!("../../assets/textures/tree.png");
 
@@ -23,8 +25,8 @@ impl TrianglePass {
             source: wgpu::ShaderSource::Wgsl(shader_source.into()),
         });
 
-        let reflection = reflect_wgsl("triangle", shader_source).unwrap();
-        validate_vertex_layout("triangle", &reflection, "vs_main", &[Vertex::desc()]).unwrap();
+        let reflection = reflect_wgsl("triangle", shader_source)?;
+        validate_vertex_layout("triangle", &reflection, "vs_main", &[Vertex::desc()])?;
 
         let bind_group_layouts = reflection
             .bind_groups
@@ -43,10 +45,10 @@ impl TrianglePass {
             immediate_size: 0,
         });
 
-        let texture = Texture::new(texture_data, queue, device);
+        let texture = Texture::new(texture_data, queue, device).context("failed to create tree texture")?;
         let bind_group_layout = bind_group_layouts
             .first()
-            .expect("triangle shader must declare a texture bind group");
+            .context("triangle shader must declare a texture bind group")?;
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Triangle Texture Bind Group"),
             layout: bind_group_layout,
@@ -88,11 +90,11 @@ impl TrianglePass {
             cache: None,
         });
 
-        Self {
+        Ok(Self {
             pipeline,
             bind_group,
             texture,
-        }
+        })
     }
 
     pub(super) fn draw_mesh<'a>(

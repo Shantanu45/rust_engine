@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use anyhow::{Context, Result};
 use winit::dpi::PhysicalSize;
 use winit::window::Window;
 
@@ -16,28 +17,30 @@ pub struct Renderer {
 }
 
 impl Renderer {
-    pub async fn new(window: Arc<Window>) -> Self {
+    pub async fn new(window: Arc<Window>) -> Result<Self> {
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
             backends: wgpu::Backends::VULKAN,
             flags: wgpu::InstanceFlags::empty(),
             ..wgpu::InstanceDescriptor::new_without_display_handle()
         });
 
-        let surface = instance.create_surface(window.clone()).unwrap();
-        let gpu = GpuContext::new(instance, &surface).await;
+        let surface = instance
+            .create_surface(window.clone())
+            .context("failed to create WGPU surface")?;
+        let gpu = GpuContext::new(instance, &surface).await?;
 
         let surface = SurfaceState::new(window, surface, &gpu.adapter);
 
         surface.configure(&gpu.device);
 
-        let triangle_pass = TrianglePass::new(&gpu.device, &gpu.queue, surface.view_format());
+        let triangle_pass = TrianglePass::new(&gpu.device, &gpu.queue, surface.view_format())?;
         let triangle_mesh = Mesh::new(&gpu.device);
-        Self {
+        Ok(Self {
             gpu,
             surface,
             triangle_pass,
             triangle_mesh,
-        }
+        })
     }
 
     pub fn window(&self) -> &Window {
@@ -68,8 +71,11 @@ impl Renderer {
                 unreachable!("No error scope registered, so validation errors will panic")
             }
             wgpu::CurrentSurfaceTexture::Lost => {
-                self.surface.recreate(&self.gpu.instance);
-                self.surface.configure(&self.gpu.device);
+                if let Err(error) = self.surface.recreate(&self.gpu.instance) {
+                    tracing::error!(?error, "failed to recreate lost surface");
+                } else {
+                    self.surface.configure(&self.gpu.device);
+                }
                 return;
             }
         };
