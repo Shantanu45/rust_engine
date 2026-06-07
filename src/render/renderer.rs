@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 use winit::dpi::PhysicalSize;
 use winit::window::Window;
 
-use super::camera::{Camera, CameraBinding};
+use super::camera::{Camera, CameraBinding, CameraController};
 use super::gpu::GpuContext;
 use super::mesh::Mesh;
 use super::pipeline::TrianglePass;
@@ -17,6 +17,7 @@ pub struct Renderer {
     triangle_mesh: Mesh,
     camera: Camera,
     camera_binding: CameraBinding,
+    camera_controller: CameraController,
 }
 
 impl Renderer {
@@ -38,12 +39,14 @@ impl Renderer {
 
         let triangle_pass = TrianglePass::new(&gpu.device, &gpu.queue, surface.view_format())?;
         let camera = Camera::new(surface.aspect_ratio());
+        
         let camera_binding = CameraBinding::new(
             &gpu.device,
             triangle_pass.camera_bind_group_layout(),
             &camera,
         );
         let triangle_mesh = Mesh::new(&gpu.device);
+        let camera_controller = CameraController::new();
         Ok(Self {
             gpu,
             surface,
@@ -51,6 +54,7 @@ impl Renderer {
             triangle_mesh,
             camera,
             camera_binding,
+            camera_controller,
         })
     }
 
@@ -66,7 +70,16 @@ impl Renderer {
             .write_camera(&self.gpu.queue, &self.camera);
     }
 
-    pub fn update(&self) {}
+    pub fn input(&mut self, event: &winit::event::KeyEvent) {
+        self.camera_controller.process_key_events(event);
+    }
+
+    pub fn update(&mut self) {
+        self.camera_controller.update_camera(&mut self.camera);
+
+        self.camera_binding
+            .write_camera(&self.gpu.queue, &self.camera);
+    }
 
     pub fn render(&mut self) {
         let surface_texture = match self.surface.surface.get_current_texture() {
@@ -125,7 +138,6 @@ impl Renderer {
                 occlusion_query_set: None,
                 multiview_mask: None,
             });
-
             self.triangle_pass.draw_mesh(
                 &mut render_pass,
                 &self.triangle_mesh,

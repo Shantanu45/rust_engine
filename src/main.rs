@@ -66,6 +66,11 @@ impl ApplicationHandler for App {
                 // here as this event is always followed up by redraw request.
                 state.resize(size);
             }
+            WindowEvent::KeyboardInput { event, .. } => {
+                if let Some(state) = self.state.as_mut() {
+                    state.input(&event);
+                }
+            }
             _ => (),
         }
     }

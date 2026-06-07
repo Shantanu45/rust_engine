@@ -23,6 +23,9 @@ impl State {
         self.renderer.resize(new_size);
     }
 
+    pub fn input(&mut self, event: &winit::event::KeyEvent) {
+        self.renderer.input(event);
+    }
     pub fn update(&mut self) {
         self.renderer.update();
     }

@@ -1,4 +1,6 @@
 use wgpu::util::DeviceExt;
+use winit::event::ElementState;
+use winit::keyboard::{KeyCode, PhysicalKey};
 
 pub struct Camera {
     pub eye: glam::Vec3,
@@ -8,6 +10,63 @@ pub struct Camera {
     pub fovy: f32,
     pub znear: f32,
     pub zfar: f32,
+}
+
+pub struct CameraController {
+    forward: bool,
+    backward: bool,
+    left: bool,
+    right: bool,
+    speed: f32,
+}
+
+impl CameraController {
+    pub fn new() -> Self {
+        Self {
+            forward: false,
+            backward: false,
+            left: false,
+            right: false,
+            speed: 1.0_f32.to_radians(),
+        }
+    }
+
+    pub fn process_key_events(&mut self, event: &winit::event::KeyEvent) {
+        let pressed = event.state == ElementState::Pressed;
+
+        match event.physical_key {
+            PhysicalKey::Code(KeyCode::KeyW) | PhysicalKey::Code(KeyCode::ArrowUp) => {
+                self.forward = pressed;
+            }
+            PhysicalKey::Code(KeyCode::KeyS) | PhysicalKey::Code(KeyCode::ArrowDown) => {
+                self.backward = pressed;
+            }
+            PhysicalKey::Code(KeyCode::KeyA) | PhysicalKey::Code(KeyCode::ArrowLeft) => {
+                self.left = pressed;
+            }
+            PhysicalKey::Code(KeyCode::KeyD) | PhysicalKey::Code(KeyCode::ArrowRight) => {
+                self.right = pressed;
+            }
+            _ => {}
+        }
+    }
+
+    pub fn update_camera(&mut self, camera: &mut Camera) {
+        let yaw = match (self.left, self.right) {
+            (true, false) => self.speed,
+            (false, true) => -self.speed,
+            _ => 0.0,
+        };
+        let pitch = match (self.forward, self.backward) {
+            (true, false) => self.speed,
+            (false, true) => -self.speed,
+            _ => 0.0,
+        };
+
+        if yaw != 0.0 || pitch != 0.0 {
+            camera.orbit_yaw_pitch(yaw, pitch);
+        }
+    }
 }
 
 #[rustfmt::skip]
@@ -36,6 +95,19 @@ impl Camera {
             glam::Mat4::perspective_rh(self.fovy.to_radians(), self.aspect, self.znear, self.zfar);
 
         OPENGL_TO_WGPU_MATRIX * projection * view
+    }
+
+    pub fn orbit_yaw_pitch(&mut self, yaw: f32, pitch: f32) {
+        let offset = self.eye - self.target;
+
+        let yaw_rotation = glam::Quat::from_rotation_y(yaw);
+
+        let right = offset.cross(self.up).normalize();
+        let pitch_rotation = glam::Quat::from_axis_angle(right, pitch);
+
+        let rotated_offset = yaw_rotation * pitch_rotation * offset;
+
+        self.eye = self.target + rotated_offset;
     }
 }
 
