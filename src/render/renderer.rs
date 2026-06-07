@@ -4,6 +4,7 @@ use anyhow::{Context, Result};
 use winit::dpi::PhysicalSize;
 use winit::window::Window;
 
+use super::camera::{Camera, CameraBinding};
 use super::gpu::GpuContext;
 use super::mesh::Mesh;
 use super::pipeline::TrianglePass;
@@ -14,6 +15,8 @@ pub struct Renderer {
     surface: SurfaceState,
     triangle_pass: TrianglePass,
     triangle_mesh: Mesh,
+    camera: Camera,
+    camera_binding: CameraBinding,
 }
 
 impl Renderer {
@@ -33,18 +36,21 @@ impl Renderer {
 
         surface.configure(&gpu.device);
 
-        let triangle_pass = TrianglePass::new(
+        let triangle_pass = TrianglePass::new(&gpu.device, &gpu.queue, surface.view_format())?;
+        let camera = Camera::new(surface.aspect_ratio());
+        let camera_binding = CameraBinding::new(
             &gpu.device,
-            &gpu.queue,
-            surface.view_format(),
-            surface.aspect_ratio(),
-        )?;
+            triangle_pass.camera_bind_group_layout(),
+            &camera,
+        );
         let triangle_mesh = Mesh::new(&gpu.device);
         Ok(Self {
             gpu,
             surface,
             triangle_pass,
             triangle_mesh,
+            camera,
+            camera_binding,
         })
     }
 
@@ -55,8 +61,9 @@ impl Renderer {
     pub fn resize(&mut self, new_size: PhysicalSize<u32>) {
         self.surface.resize(new_size);
         self.surface.configure(&self.gpu.device);
-        self.triangle_pass
-            .resize(&self.gpu.queue, self.surface.aspect_ratio());
+        self.camera.aspect = self.surface.aspect_ratio();
+        self.camera_binding
+            .write_camera(&self.gpu.queue, &self.camera);
     }
 
     pub fn update(&self) {}
@@ -119,8 +126,11 @@ impl Renderer {
                 multiview_mask: None,
             });
 
-            self.triangle_pass
-                .draw_mesh(&mut render_pass, &self.triangle_mesh);
+            self.triangle_pass.draw_mesh(
+                &mut render_pass,
+                &self.triangle_mesh,
+                self.camera_binding.bind_group(),
+            );
         }
 
         self.gpu.queue.submit([encoder.finish()]);

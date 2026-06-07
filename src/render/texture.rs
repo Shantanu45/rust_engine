@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use image::GenericImageView;
 
 pub(super) struct Texture {
-    pub(super) texture: wgpu::Texture,
+    pub(super) _texture: wgpu::Texture,
     pub(super) view: wgpu::TextureView,
     pub(super) sampler: wgpu::Sampler,
 }
@@ -63,9 +63,51 @@ impl Texture {
         });
 
         Ok(Self {
-            texture: diffuse_texture,
+            _texture: diffuse_texture,
             view: diffuse_texture_view,
             sampler: diffuse_sampler,
         })
+    }
+}
+
+pub(super) struct TextureBinding {
+    _texture: Texture,
+    bind_group: wgpu::BindGroup,
+}
+
+impl TextureBinding {
+    pub(super) fn new(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        layout: &wgpu::BindGroupLayout,
+        data: &'static [u8],
+        label: &str,
+    ) -> Result<Self> {
+        let texture = Texture::new(data, queue, device)
+            .with_context(|| format!("failed to create {label} texture"))?;
+
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some(&format!("{label} Texture Bind Group")),
+            layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&texture.view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&texture.sampler),
+                },
+            ],
+        });
+
+        Ok(Self {
+            _texture: texture,
+            bind_group,
+        })
+    }
+
+    pub(super) fn bind_group(&self) -> &wgpu::BindGroup {
+        &self.bind_group
     }
 }

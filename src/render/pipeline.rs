@@ -1,37 +1,14 @@
-use anyhow::{Context, Result};
-use wgpu::util::DeviceExt;
+use anyhow::{Context, Result, bail};
 
-use crate::render::camera::Camera;
 use crate::shader_reflect::{BindGroupReflection, reflect_wgsl, validate_vertex_layout};
 
 use super::mesh::{Mesh, Vertex};
-use super::texture::Texture;
-
-#[repr(C)]
-#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-struct CameraUniform {
-    view_proj: [[f32; 4]; 4],
-}
-
-impl CameraUniform {
-    fn new() -> Self {
-        Self {
-            view_proj: glam::Mat4::IDENTITY.to_cols_array_2d(),
-        }
-    }
-
-    fn update_view_proj(&mut self, camera: &Camera) {
-        self.view_proj = camera.build_view_projection_matrix().to_cols_array_2d();
-    }
-}
+use super::texture::TextureBinding;
 
 pub(super) struct TrianglePass {
     pipeline: wgpu::RenderPipeline,
-    texture_bind_group: wgpu::BindGroup,
-    camera_bind_group: wgpu::BindGroup,
-    camera_buffer: wgpu::Buffer,
-    camera: Camera,
-    _texture: Texture,
+    texture: TextureBinding,
+    camera_bind_group_layout: wgpu::BindGroupLayout,
 }
 
 impl TrianglePass {
@@ -39,7 +16,6 @@ impl TrianglePass {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         color_format: wgpu::TextureFormat,
-        aspect: f32,
     ) -> Result<Self> {
         let shader_source = include_str!("../shaders/triangle.wgsl");
         let texture_data = include_bytes!("../../assets/textures/tree.png");
@@ -52,75 +28,18 @@ impl TrianglePass {
         let reflection = reflect_wgsl("triangle", shader_source)?;
         validate_vertex_layout("triangle", &reflection, "vs_main", &[Vertex::desc()])?;
 
-        let bind_group_layouts = reflection
-            .bind_groups
-            .iter()
-            .map(|group| create_bind_group_layout(device, group, "Triangle Bind Group Layout"))
-            .collect::<Vec<_>>();
-
-        let bind_group_layout_refs = bind_group_layouts
-            .iter()
-            .map(Some)
-            .collect::<Vec<Option<&wgpu::BindGroupLayout>>>();
-
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("Triangle Pipeline Layout"),
-            bind_group_layouts: &bind_group_layout_refs,
-            immediate_size: 0,
-        });
-
-        //let pipeline_layout = reflection.create_pipeline_layout(device, "triangle");
-
-        let texture =
-            Texture::new(texture_data, queue, device).context("failed to create tree texture")?;
-        let texture_bind_group_layout = bind_group_layouts
-            .first()
-            .context("triangle shader must declare a texture bind group")?;
-        let texture_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("Triangle Texture Bind Group"),
-            layout: texture_bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&texture.view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&texture.sampler),
-                },
-            ],
-        });
-
-        let camera = Camera {
-            eye: glam::Vec3::new(0.0, 1.0, 2.0),
-            target: glam::Vec3::ZERO,
-            up: glam::Vec3::Y,
-            aspect,
-            fovy: 45.0,
-            znear: 0.1,
-            zfar: 100.0,
-        };
-
-        let mut camera_uniform = CameraUniform::new();
-        camera_uniform.update_view_proj(&camera);
-
-        let camera_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Camera Buffer"),
-            contents: bytemuck::cast_slice(&[camera_uniform]),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
-
-        let camera_bind_group_layout = bind_group_layouts
-            .get(1)
-            .context("triangle shader must declare a camera bind group")?;
-        let camera_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("Triangle Camera Bind Group"),
-            layout: camera_bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: camera_buffer.as_entire_binding(),
-            }],
-        });
+        let layouts = ReflectedLayouts::new(device, &reflection.bind_groups, "Triangle")?;
+        let pipeline_layout = layouts.create_pipeline_layout(device, "Triangle Pipeline Layout");
+        let camera_bind_group_layout = layouts
+            .bind_group(1, "triangle shader must declare a camera bind group")?
+            .clone();
+        let texture = TextureBinding::new(
+            device,
+            queue,
+            layouts.bind_group(0, "triangle shader must declare a texture bind group")?,
+            texture_data,
+            "Triangle",
+        )?;
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("Triangle Pipeline"),
@@ -150,33 +69,72 @@ impl TrianglePass {
 
         Ok(Self {
             pipeline,
-            texture_bind_group,
-            camera_bind_group,
-            camera_buffer,
-            camera,
-            _texture: texture,
+            texture,
+            camera_bind_group_layout,
         })
     }
 
-    pub(super) fn resize(&mut self, queue: &wgpu::Queue, aspect: f32) {
-        self.camera.aspect = aspect;
-
-        let mut camera_uniform = CameraUniform::new();
-        camera_uniform.update_view_proj(&self.camera);
-        queue.write_buffer(
-            &self.camera_buffer,
-            0,
-            bytemuck::cast_slice(&[camera_uniform]),
-        );
+    pub(super) fn camera_bind_group_layout(&self) -> &wgpu::BindGroupLayout {
+        &self.camera_bind_group_layout
     }
 
-    pub(super) fn draw_mesh<'a>(&'a self, render_pass: &mut wgpu::RenderPass<'a>, mesh: &'a Mesh) {
+    pub(super) fn draw_mesh<'a>(
+        &'a self,
+        render_pass: &mut wgpu::RenderPass<'a>,
+        mesh: &'a Mesh,
+        camera_bind_group: &'a wgpu::BindGroup,
+    ) {
         render_pass.set_pipeline(&self.pipeline);
-        render_pass.set_bind_group(0, &self.texture_bind_group, &[]);
-        render_pass.set_bind_group(1, &self.camera_bind_group, &[]);
+        render_pass.set_bind_group(0, self.texture.bind_group(), &[]);
+        render_pass.set_bind_group(1, camera_bind_group, &[]);
         render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
         render_pass.set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
         render_pass.draw_indexed(0..mesh.index_count, 0, 0..1);
+    }
+}
+
+struct ReflectedLayouts {
+    bind_groups: Vec<wgpu::BindGroupLayout>,
+}
+
+impl ReflectedLayouts {
+    fn new(device: &wgpu::Device, groups: &[BindGroupReflection], label: &str) -> Result<Self> {
+        let mut bind_groups = Vec::with_capacity(groups.len());
+
+        for (index, group) in groups.iter().enumerate() {
+            if group.group as usize != index {
+                bail!(
+                    "{label}: bind group {} is not contiguous at layout index {index}",
+                    group.group
+                );
+            }
+
+            bind_groups.push(create_bind_group_layout(
+                device,
+                group,
+                &format!("{label} Bind Group Layout {}", group.group),
+            ));
+        }
+
+        Ok(Self { bind_groups })
+    }
+
+    fn bind_group(&self, group: u32, message: &'static str) -> Result<&wgpu::BindGroupLayout> {
+        self.bind_groups.get(group as usize).context(message)
+    }
+
+    fn create_pipeline_layout(&self, device: &wgpu::Device, label: &str) -> wgpu::PipelineLayout {
+        let bind_group_layouts = self
+            .bind_groups
+            .iter()
+            .map(Some)
+            .collect::<Vec<Option<&wgpu::BindGroupLayout>>>();
+
+        device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some(label),
+            bind_group_layouts: &bind_group_layouts,
+            immediate_size: 0,
+        })
     }
 }
 
