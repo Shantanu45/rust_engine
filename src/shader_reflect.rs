@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use naga::valid::{Capabilities, ValidationFlags, Validator};
 use naga::{AddressSpace, Binding, ImageClass, ImageDimension, ShaderStage, TypeInner};
 
@@ -113,9 +113,7 @@ pub fn validate_vertex_layout(
     let entry = reflection
         .entry_points
         .iter()
-        .find(|entry| {
-            entry.name == vertex_entry && entry.stage == ShaderStageReflection::Vertex
-        })
+        .find(|entry| entry.name == vertex_entry && entry.stage == ShaderStageReflection::Vertex)
         .with_context(|| format!("{shader_name}: vertex entry point `{vertex_entry}` not found"))?;
 
     let provided_locations = layouts
@@ -148,7 +146,13 @@ fn reflect_entry_point(
     }
 
     if let Some(result) = &entry.function.result {
-        collect_locations(module, result.ty, result.binding.as_ref(), &None, &mut outputs)?;
+        collect_locations(
+            module,
+            result.ty,
+            result.binding.as_ref(),
+            &None,
+            &mut outputs,
+        )?;
     }
 
     Ok(EntryPointReflection {
@@ -247,16 +251,16 @@ fn reflect_binding_type(
             min_binding_size: None,
         }),
         AddressSpace::Handle => match &ty.inner {
-            TypeInner::Sampler { comparison } => {
-                Ok(wgpu::BindingType::Sampler(if *comparison {
-                    wgpu::SamplerBindingType::Comparison
-                } else {
-                    wgpu::SamplerBindingType::Filtering
-                }))
-            }
-            TypeInner::Image { dim, arrayed, class } => {
-                reflect_image_binding(label, *dim, *arrayed, class)
-            }
+            TypeInner::Sampler { comparison } => Ok(wgpu::BindingType::Sampler(if *comparison {
+                wgpu::SamplerBindingType::Comparison
+            } else {
+                wgpu::SamplerBindingType::Filtering
+            })),
+            TypeInner::Image {
+                dim,
+                arrayed,
+                class,
+            } => reflect_image_binding(label, *dim, *arrayed, class),
             other => bail!("{label}: unsupported handle binding type: {other:?}"),
         },
         other => bail!("{label}: unsupported resource address space: {other:?}"),
@@ -327,11 +331,21 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec![0, 1]
         );
-        assert_eq!(reflection.bind_groups.len(), 1);
+        assert_eq!(reflection.bind_groups.len(), 2);
         assert_eq!(reflection.bind_groups[0].group, 0);
         assert_eq!(reflection.bind_groups[0].bindings.len(), 2);
         assert_eq!(reflection.bind_groups[0].bindings[0].binding, 0);
         assert_eq!(reflection.bind_groups[0].bindings[1].binding, 1);
+        assert_eq!(reflection.bind_groups[1].group, 1);
+        assert_eq!(reflection.bind_groups[1].bindings.len(), 1);
+        assert_eq!(reflection.bind_groups[1].bindings[0].binding, 0);
+        assert!(matches!(
+            reflection.bind_groups[1].bindings[0].binding_type,
+            wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Uniform,
+                ..
+            }
+        ));
     }
 
     #[test]

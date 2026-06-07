@@ -1,6 +1,6 @@
 mod render;
-mod state;
 mod shader_reflect;
+mod state;
 
 use anyhow::{Context, Result};
 use state::State;

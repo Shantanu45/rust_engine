@@ -73,4 +73,8 @@ impl SurfaceState {
     pub(super) fn view_format(&self) -> wgpu::TextureFormat {
         self.surface_format.add_srgb_suffix()
     }
+
+    pub(super) fn aspect_ratio(&self) -> f32 {
+        self.size.width as f32 / self.size.height.max(1) as f32
+    }
 }

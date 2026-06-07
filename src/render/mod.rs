@@ -1,3 +1,4 @@
+mod camera;
 mod gpu;
 mod mesh;
 mod pipeline;

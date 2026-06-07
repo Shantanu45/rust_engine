@@ -33,7 +33,12 @@ impl Renderer {
 
         surface.configure(&gpu.device);
 
-        let triangle_pass = TrianglePass::new(&gpu.device, &gpu.queue, surface.view_format())?;
+        let triangle_pass = TrianglePass::new(
+            &gpu.device,
+            &gpu.queue,
+            surface.view_format(),
+            surface.aspect_ratio(),
+        )?;
         let triangle_mesh = Mesh::new(&gpu.device);
         Ok(Self {
             gpu,
@@ -50,6 +55,8 @@ impl Renderer {
     pub fn resize(&mut self, new_size: PhysicalSize<u32>) {
         self.surface.resize(new_size);
         self.surface.configure(&self.gpu.device);
+        self.triangle_pass
+            .resize(&self.gpu.queue, self.surface.aspect_ratio());
     }
 
     pub fn update(&self) {}
@@ -86,13 +93,13 @@ impl Renderer {
                 format: Some(self.surface.view_format()),
                 ..Default::default()
             });
-        
-        let mut encoder =
-            self.gpu
-                .device
-                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                    label: Some("Render Encoder"),
-                });
+
+        let mut encoder = self
+            .gpu
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("Render Encoder"),
+            });
 
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {

@@ -1,5 +1,5 @@
-use std::sync::Arc;
 use anyhow::Result;
+use std::sync::Arc;
 use winit::window::Window;
 
 use crate::render::Renderer;
@@ -23,7 +23,9 @@ impl State {
         self.renderer.resize(new_size);
     }
 
-    pub fn update(&mut self) {self.renderer.update();}
+    pub fn update(&mut self) {
+        self.renderer.update();
+    }
     pub fn render(&mut self) {
         self.renderer.render();
     }

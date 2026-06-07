@@ -8,8 +8,13 @@ pub(super) struct Texture {
 }
 
 impl Texture {
-    pub(super) fn new(data: &'static [u8], queue: &wgpu::Queue, device: &wgpu::Device) -> Result<Self> {
-        let diffuse_image = image::load_from_memory(data).context("failed to decode texture image")?;
+    pub(super) fn new(
+        data: &'static [u8],
+        queue: &wgpu::Queue,
+        device: &wgpu::Device,
+    ) -> Result<Self> {
+        let diffuse_image =
+            image::load_from_memory(data).context("failed to decode texture image")?;
         let diffuse_rgba = diffuse_image.to_rgba8();
 
         let dimensions = diffuse_image.dimensions();
