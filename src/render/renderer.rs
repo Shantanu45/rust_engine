@@ -6,7 +6,7 @@ use winit::window::Window;
 
 use super::camera::{Camera, CameraBinding, CameraController};
 use super::gpu::GpuContext;
-use super::mesh::Mesh;
+use super::mesh::{mesh_quad, mesh_triangle, mesh_cube, Mesh};
 use super::pipeline::TrianglePass;
 use super::surface::SurfaceState;
 
@@ -45,7 +45,7 @@ impl Renderer {
             triangle_pass.camera_bind_group_layout(),
             &camera,
         );
-        let triangle_mesh = Mesh::new(&gpu.device);
+        let triangle_mesh = mesh_cube(&gpu.device);
         let camera_controller = CameraController::new();
         Ok(Self {
             gpu,

@@ -1,3 +1,4 @@
+use std::ops::Index;
 use wgpu::util::DeviceExt;
 
 #[repr(C)]
@@ -36,7 +37,7 @@ pub(super) struct Mesh {
 }
 
 impl Mesh {
-    pub(super) fn new(device: &wgpu::Device) -> Self {
+    /*pub(super) fn new(device: &wgpu::Device) -> Self {
         const VERTICES: &[Vertex] = &[
             Vertex {
                 position: [-0.5, 0.5, 0.0],
@@ -74,5 +75,126 @@ impl Mesh {
             index_buffer,
             index_count: INDICES.len() as u32,
         }
+    }*/
+
+    pub fn new(device: &wgpu::Device, vertices: &[Vertex], indices: &[u16] ) -> Self {
+        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Vertex Buffer"),
+            contents: bytemuck::cast_slice(vertices),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Index Buffer"),
+            contents: bytemuck::cast_slice(indices),
+            usage: wgpu::BufferUsages::INDEX,
+        });
+
+        Self {
+            vertex_buffer,
+            vertex_count: vertices.len() as u32,
+            index_buffer,
+            index_count: indices.len() as u32,
+        }
     }
+}
+
+pub fn mesh_triangle(device: &wgpu::Device) -> Mesh {
+    const VERTICES: &[Vertex] = &[
+        Vertex {
+            position: [0.0, 0.5, 0.0],
+            tex_coords: [0.0, 0.0],
+        },
+        Vertex {
+            position: [0.5, -0.25, 0.0],
+            tex_coords: [1.0, 0.0],
+        },
+        Vertex {
+            position: [-0.5, -0.25, 0.0],
+            tex_coords: [0.0, 1.0],
+        },
+    ];
+    const INDICES: &[u16] = &[0, 1, 2];
+
+    Mesh::new(device, VERTICES, INDICES)
+}
+
+pub fn mesh_quad(device: &wgpu::Device) -> Mesh {
+    const VERTICES: &[Vertex] = &[
+        Vertex {
+            position: [-0.5, 0.5, 0.0],
+            tex_coords: [0.0, 0.0],
+        },
+        Vertex {
+            position: [0.5, 0.5, 0.0],
+            tex_coords: [1.0, 0.0],
+        },
+        Vertex {
+            position: [-0.5, -0.5, 0.0],
+            tex_coords: [0.0, 1.0],
+        },
+        Vertex {
+            position: [0.5, -0.5, 0.0],
+            tex_coords: [1.0, 1.0],
+        },
+    ];
+    const INDICES: &[u16] = &[0, 1, 2, 1, 3, 2];
+
+    Mesh::new(device, VERTICES, INDICES)
+}
+
+pub fn mesh_cube(device: &wgpu::Device) -> Mesh {
+    const VERTICES: &[Vertex] = &[
+        // Front (+Z)
+        Vertex { position: [-0.5, -0.5,  0.5], tex_coords: [0.0, 1.0] },
+        Vertex { position: [ 0.5, -0.5,  0.5], tex_coords: [1.0, 1.0] },
+        Vertex { position: [ 0.5,  0.5,  0.5], tex_coords: [1.0, 0.0] },
+        Vertex { position: [-0.5,  0.5,  0.5], tex_coords: [0.0, 0.0] },
+
+        // Back (-Z)
+        Vertex { position: [ 0.5, -0.5, -0.5], tex_coords: [0.0, 1.0] },
+        Vertex { position: [-0.5, -0.5, -0.5], tex_coords: [1.0, 1.0] },
+        Vertex { position: [-0.5,  0.5, -0.5], tex_coords: [1.0, 0.0] },
+        Vertex { position: [ 0.5,  0.5, -0.5], tex_coords: [0.0, 0.0] },
+
+        // Left (-X)
+        Vertex { position: [-0.5, -0.5, -0.5], tex_coords: [0.0, 1.0] },
+        Vertex { position: [-0.5, -0.5,  0.5], tex_coords: [1.0, 1.0] },
+        Vertex { position: [-0.5,  0.5,  0.5], tex_coords: [1.0, 0.0] },
+        Vertex { position: [-0.5,  0.5, -0.5], tex_coords: [0.0, 0.0] },
+
+        // Right (+X)
+        Vertex { position: [ 0.5, -0.5,  0.5], tex_coords: [0.0, 1.0] },
+        Vertex { position: [ 0.5, -0.5, -0.5], tex_coords: [1.0, 1.0] },
+        Vertex { position: [ 0.5,  0.5, -0.5], tex_coords: [1.0, 0.0] },
+        Vertex { position: [ 0.5,  0.5,  0.5], tex_coords: [0.0, 0.0] },
+
+        // Top (+Y)
+        Vertex { position: [-0.5,  0.5,  0.5], tex_coords: [0.0, 1.0] },
+        Vertex { position: [ 0.5,  0.5,  0.5], tex_coords: [1.0, 1.0] },
+        Vertex { position: [ 0.5,  0.5, -0.5], tex_coords: [1.0, 0.0] },
+        Vertex { position: [-0.5,  0.5, -0.5], tex_coords: [0.0, 0.0] },
+
+        // Bottom (-Y)
+        Vertex { position: [-0.5, -0.5, -0.5], tex_coords: [0.0, 1.0] },
+        Vertex { position: [ 0.5, -0.5, -0.5], tex_coords: [1.0, 1.0] },
+        Vertex { position: [ 0.5, -0.5,  0.5], tex_coords: [1.0, 0.0] },
+        Vertex { position: [-0.5, -0.5,  0.5], tex_coords: [0.0, 0.0] },
+    ];
+
+    const INDICES: &[u16] = &[
+        // Front
+        0, 1, 2, 0, 2, 3,
+        // Back
+        4, 5, 6, 4, 6, 7,
+        // Left
+        8, 9, 10, 8, 10, 11,
+        // Right
+        12, 13, 14, 12, 14, 15,
+        // Top
+        16, 17, 18, 16, 18, 19,
+        // Bottom
+        20, 21, 22, 20, 22, 23,
+    ];
+
+    Mesh::new(device, VERTICES, INDICES)
 }
